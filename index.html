@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>AbibKah — Partikel Luar Angkasa</title>
+<style>
+  :root{
+    --bg1:#000006;
+    --bg2:#071029;
+    --accent:#2FA8FF;
+    --white:#ffffff;
+    --glass: rgba(255,255,255,0.06);
+  }
+  html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Roboto,"Helvetica Neue",Arial;}
+  body{
+    background: radial-gradient(1200px 600px at 10% 20%, rgba(47,168,255,0.06), transparent 8%),
+                radial-gradient(900px 400px at 90% 80%, rgba(255,255,255,0.02), transparent 10%),
+                linear-gradient(180deg,var(--bg1) 0%, var(--bg2) 60%);
+    color:var(--white);
+    overflow:hidden;
+  }
+
+  canvas#scene{position:fixed;inset:0;display:block;z-index:0}
+
+  /* watermark kiri atas */
+  .watermark{
+    position:fixed;left:16px;top:12px;z-index:30;font-weight:700;font-size:18px;
+    display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:10px;background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02));
+    backdrop-filter: blur(6px);
+  }
+  .wm-abib{color:var(--accent);letter-spacing:0.6px}
+  .wm-kah{color:var(--white);opacity:0.95;letter-spacing:0.6px}
+
+  /* tiga titik kanan atas */
+  .menu-dot{
+    position:fixed;right:16px;top:12px;z-index:40;
+  }
+  .dot-btn{width:44px;height:44px;border-radius:12px;background:var(--glass);display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.03);cursor:pointer}
+  .dot-btn .dot{width:6px;height:6px;background:rgba(255,255,255,0.6);border-radius:50%;box-shadow:0 0 0 4px rgba(255,255,255,0.02);margin:0 1px}
+  .menu-panel{
+    position:fixed;right:16px;top:68px;z-index:40;width:320px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(10,12,25,0.88), rgba(15,18,35,0.82));
+    border:1px solid rgba(255,255,255,0.04);box-shadow: 0 10px 30px rgba(2,6,23,0.6);display:none;
+    color:rgba(255,255,255,0.9);backdrop-filter: blur(6px);
+  }
+  .menu-panel h4{margin:0 0 8px 0;font-size:14px}
+  .menu-panel p{font-size:13px;line-height:1.3;margin:0 0 10px 0;opacity:0.9}
+  .menu-panel .row{display:flex;gap:8px;align-items:center}
+  .menu-panel input[type="text"]{
+    flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--white);
+  }
+  .menu-panel button{
+    padding:8px 10px;border-radius:8px;border:none;background:var(--accent);color:#022;cursor:pointer;font-weight:600;
+  }
+
+  /* bottom-left: deteksi gerakan */
+  .detector{
+    position:fixed;left:16px;bottom:16px;z-index:35;padding:10px 12px;border-radius:10px;background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02));
+    border:1px solid rgba(255,255,255,0.03);font-size:13px;color:var(--white);display:flex;gap:8px;align-items:center;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.5);
+  }
+  .detector .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.12)}
+  .detector.active .dot{background:var(--accent);box-shadow:0 0 14px rgba(47,168,255,0.25)}
+
+  /* camera feed bottom-right */
+  .cam-wrap{
+    position:fixed;right:16px;bottom:16px;z-index:35;width:140px;height:100px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.04);
+    background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.12));backdrop-filter: blur(6px);
+  }
+  .cam-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+
+  /* small planet + ui ornaments */
+  .planet{
+    position:fixed;right:8%;top:30%;width:220px;height:220px;border-radius:50%;z-index:10;
+    background:radial-gradient(circle at 30% 30%, rgba(47,168,255,0.12), transparent 20%),
+               radial-gradient(circle at 70% 70%, rgba(255,255,255,0.03), transparent 30%),
+               linear-gradient(120deg,#071b32 0%, #051024 60%);
+    box-shadow: inset -12px -8px 40px rgba(0,0,0,0.6), 0 30px 80px rgba(2,6,23,0.6);
+    mix-blend-mode: screen;opacity:0.9;filter:blur(1px);
+  }
+  .shooting{position:fixed;left:30%;top:10%;width:2px;height:80px;background:linear-gradient(180deg, rgba(255,255,255,0.9), rgba(47,168,255,0.0));transform:rotate(18deg);opacity:0.7;z-index:5;border-radius:2px;filter:blur(1px)}
+  @media (max-width:600px){
+    .menu-panel{width:260px;right:10px}
+    .cam-wrap{width:120px;height:88px}
+    .planet{display:none}
+  }
+  /* tiny helper text style */
+  .muted{opacity:0.8;font-size:12px}
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div class="watermark" aria-hidden="true">
+  <div class="wm-abib">Abib</div>
+  <div class="wm-kah">Kah</div>
+</div>
+
+<div class="menu-dot">
+  <div class="dot-btn" id="menuBtn" title="Info">
+    <div style="display:flex;gap:4px">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+  </div>
+</div>
+
+<div class="menu-panel" id="menuPanel" role="dialog" aria-label="Penjelasan partikel">
+  <h4>Penjelasan & kontrol</h4>
+  <p>Partikel bertema luar angkasa. Gerakan di depan kamera memicu mode khusus: partikel membentuk teks yang kamu set di bawah. Coba gerakkan tangan dekat kamera.</p>
+  <div class="row" style="margin-bottom:8px">
+    <input id="particleText" type="text" value="halo abibkah" placeholder="Tulis teks partikel..." />
+    <button id="applyTxt">Apply</button>
+  </div>
+  <p class="muted">Mode deteksi pakai perbandingan frame. Kalau mau matiin kamera tinggal block permission di browser.</p>
+</div>
+
+<div class="detector" id="detector">
+  <div class="dot"></div>
+  <div class="muted" id="detectorText">menunggu gerakan</div>
+</div>
+
+<div class="cam-wrap" id="camWrap">
+  <video id="cam" autoplay playsinline muted></video>
+</div>
+
+<div class="planet" aria-hidden="true"></div>
+<div class="shooting" aria-hidden="true" style="animation:shoot 6s linear infinite"></div>
+
+<script>
+/* ========= util & setup ========= */
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d', {alpha:true});
+let W = canvas.width = innerWidth;
+let H = canvas.height = innerHeight;
+
+addEventListener('resize', ()=>{W=canvas.width=innerWidth;H=canvas.height=innerHeight;initParticles();});
+
+/* ======== particles system (3D-ish) ======== */
+const NUM = Math.floor(Math.max(120, Math.min(600, (W*H)/4000)));
+let particles = [];
+let focal = 400;
+let textPoints = [];
+let particleText = document.getElementById('particleText').value || 'halo abibkah';
+let forming = false;
+let formTimer = 0;
+
+function rand(a,b){return a + Math.random()*(b-a);}
+function initParticles(){
+  particles = [];
+  for(let i=0;i<NUM;i++){
+    particles.push({
+      x: rand(-W, W),
+      y: rand(-H, H),
+      z: rand(100, 1400),
+      vx: rand(-0.2,0.2),
+      vy: rand(-0.2,0.2),
+      vz: rand(-0.6,0.3),
+      size: rand(0.8,2.6),
+      hue: rand(200,220),
+      tx: null, ty: null, tz: null // target for forming text
+    });
+  }
+}
+initParticles();
+
+/* draw particle as glow */
+function drawParticle(p, sx, sy, scale){
+  const r = p.size * scale * 1.8;
+  const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r*2.2);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.15, 'rgba(160,220,255,0.9)');
+  g.addColorStop(0.4, 'rgba(47,168,255,0.18)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.beginPath();
+  ctx.fillStyle = g;
+  ctx.arc(sx, sy, r*2.2, 0, Math.PI*2);
+  ctx.fill();
+
+  // small center
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.arc(sx, sy, Math.max(0.6, r*0.35), 0, Math.PI*2);
+  ctx.fill();
+}
+
+/* render loop */
+let last = performance.now();
+function render(t){
+  const dt = Math.min(32, t - last);
+  last = t;
+
+  ctx.clearRect(0,0,W,H);
+
+  // soft nebula overlay
+  ctx.globalCompositeOperation = 'screen';
+  ctx.fillStyle = 'rgba(2,6,23,0.25)';
+  ctx.fillRect(0,0,W,H);
+  ctx.globalCompositeOperation = 'lighter';
+
+  // basic rotation for depth vibe
+  const rot = t*0.00008;
+  const cx = W/2, cy = H/2;
+
+  // update particles
+  for(let i=0;i<particles.length;i++){
+    const p = particles[i];
+
+    // if in forming mode, move to target if exists
+    if(forming && p.tx !== null){
+      // simple spring to target
+      p.x += (p.tx - p.x) * 0.08;
+      p.y += (p.ty - p.y) * 0.08;
+      p.z += (p.tz - p.z) * 0.08;
+    } else {
+      p.x += p.vx * dt*0.06;
+      p.y += p.vy * dt*0.06;
+      p.z += p.vz * dt*0.12;
+      // wrap
+      if(p.z < 80) p.z += 1400;
+      if(p.z > 1600) p.z -= 1400;
+      if(p.x > W*1.6) p.x = -W*1.6;
+      if(p.x < -W*1.6) p.x = W*1.6;
+      if(p.y > H*1.6) p.y = -H*1.6;
+      if(p.y < -H*1.6) p.y = H*1.6;
+    }
+
+    // 3D to 2D
+    const perspective = focal / (p.z + focal);
+    const sx = cx + (p.x * Math.cos(rot) - p.y * Math.sin(rot)) * perspective;
+    const sy = cy + (p.x * Math.sin(rot) + p.y * Math.cos(rot)) * perspective;
+
+    // size scale by perspective
+    const scale = Math.max(0.2, perspective*1.6);
+    drawParticle(p, sx, sy, scale);
+  }
+
+  // subtle connecting lines when forming
+  if(forming){
+    ctx.beginPath();
+    for(let i=0;i<particles.length;i++){
+      const p = particles[i];
+      const perspective = focal / (p.z + focal);
+      const sx = cx + p.x * perspective;
+      const sy = cy + p.y * perspective;
+      if(i===0) ctx.moveTo(sx,sy);
+      else ctx.lineTo(sx,sy);
+    }
+    ctx.strokeStyle = 'rgba(47,168,255,0.02)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  // faint star overlay
+  ctx.globalCompositeOperation = 'lighter';
+  for(let s=0;s<6;s++){
+    ctx.fillStyle = s%2===0 ? 'rgba(255,255,255,0.02)' : 'rgba(47,168,255,0.02)';
+    const rx = (Math.sin(t*0.0001*(s+1))*0.5+0.5)*W;
+    const ry = (Math.cos(t*0.00009*(s+1))*0.5+0.5)*H;
+    ctx.fillRect(rx,ry,1.3,1.3);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // slowdown forming after some time
+  if(forming){
+    formTimer += dt;
+    if(formTimer > 8000){
+      forming = false;
+      formTimer = 0;
+      // clear targets
+      for(let p of particles){p.tx = p.ty = p.tz = null;}
+    }
+  }
+
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+
+/* ===== create text points for forming effect ===== */
+function createTextPoints(text){
+  const oc = document.createElement('canvas');
+  const s = Math.min(1200, Math.max(400, Math.floor(Math.min(W,H)*0.8)));
+  oc.width = s;
+  oc.height = Math.floor(s*0.3);
+  const octx = oc.getContext('2d');
+  octx.fillStyle = 'black';
+  octx.fillRect(0,0,oc.width,oc.height);
+  // big font
+  let fontSize = Math.floor(oc.height*0.8);
+  octx.font = `700 ${fontSize}px Inter, sans-serif`;
+  octx.textAlign = 'center';
+  octx.textBaseline = 'middle';
+  // white text
+  octx.fillStyle = 'white';
+  octx.fillText(text, oc.width/2, oc.height/2+4);
+
+  // sample points
+  const img = octx.getImageData(0,0,oc.width,oc.height);
+  const pts = [];
+  const gap = 6; // density
+  for(let y=0;y<oc.height;y+=gap){
+    for(let x=0;x<oc.width;x+=gap){
+      const idx = (y*oc.width + x)*4;
+      if(img.data[idx+0] > 150){ // bright pixel
+        // map to 3D coords centered around scene center
+        const mx = (x - oc.width/2);
+        const my = (y - oc.height/2);
+        const mz = rand(200,700);
+        pts.push({x: mx*1.6, y: my*1.2, z: mz});
+      }
+    }
+  }
+  return pts;
+}
+
+/* assign text points to particles */
+function formToText(text){
+  textPoints = createTextPoints(text);
+  // shuffle particles and assign nearest or map by index
+  for(let i=0;i<particles.length;i++){
+    const p = particles[i];
+    const t = textPoints[i % textPoints.length];
+    // add small jitter
+    p.tx = t.x + rand(-8,8);
+    p.ty = t.y + rand(-8,8);
+    p.tz = t.z + rand(-80,80);
+  }
+  forming = true;
+  formTimer = 0;
+}
+
+/* UI hooks for menu */
+const menuBtn = document.getElementById('menuBtn');
+const menuPanel = document.getElementById('menuPanel');
+menuBtn.addEventListener('click', ()=>{ menuPanel.style.display = menuPanel.style.display === 'block' ? 'none' : 'block'; });
+document.getElementById('applyTxt').addEventListener('click', ()=>{
+  particleText = document.getElementById('particleText').value.trim() || 'halo abibkah';
+  formToText(particleText);
+});
+
+/* ===== camera + motion detection (frame differencing) ===== */
+const video = document.getElementById('cam');
+const detectorText = document.getElementById('detectorText');
+const detectorWrap = document.getElementById('detector');
+
+const hiddenCanvas = document.createElement('canvas');
+const hctx = hiddenCanvas.getContext('2d');
+
+let prevFrame = null;
+let motionCooldown = 0;
+
+async function startCamera(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}}, audio:false});
+    video.srcObject = stream;
+    await video.play();
+    hiddenCanvas.width = video.videoWidth;
+    hiddenCanvas.height = video.videoHeight;
+    prevFrame = null;
+    requestAnimationFrame(checkMotion);
+  }catch(e){
+    detectorText.textContent = 'camera blocked';
+    console.warn('camera error', e);
+  }
+}
+startCamera();
+
+/* compute motion by simple frame difference */
+function checkMotion(){
+  if(video.readyState < 2){ requestAnimationFrame(checkMotion); return; }
+  const w = hiddenCanvas.width, h = hiddenCanvas.height;
+  hctx.drawImage(video, 0, 0, w, h);
+  const frame = hctx.getImageData(0,0,w,h);
+  if(prevFrame){
+    let diff = 0;
+    let sumX = 0, sumY = 0;
+    for(let y=0;y<h;y+=4){
+      for(let x=0;x<w;x+=4){
+        const i = (y*w + x)*4;
+        const dr = Math.abs(frame.data[i] - prevFrame.data[i]);
+        const dg = Math.abs(frame.data[i+1] - prevFrame.data[i+1]);
+        const db = Math.abs(frame.data[i+2] - prevFrame.data[i+2]);
+        const d = (dr+dg+db)/3;
+        if(d > 35){
+          diff++;
+          sumX += x;
+          sumY += y;
+        }
+      }
+    }
+    // threshold tuned for typical webcam
+    if(diff > 120){
+      // movement detected
+      const avgX = sumX / diff;
+      const avgY = sumY / diff;
+      // map to scene coords
+      const nx = (avgX / w - 0.5) * W * 1.2;
+      const ny = (avgY / h - 0.5) * H * 0.6;
+      // small ripple: nudge particles toward centroid briefly
+      for(let i=0;i<particles.length;i++){
+        const p = particles[i];
+        p.vx += (nx - p.x) * 0.0006;
+        p.vy += (ny - p.y) * 0.0006;
+      }
+      // trigger form effect when strong movement and cooldown passed
+      if(motionCooldown <= 0){
+        formToText(particleText);
+        motionCooldown = 2000; // ms
+      }
+      detectorText.textContent = 'gerakan terdeteksi';
+      detectorWrap.classList.add('active');
+    }else{
+      detectorText.textContent = 'menunggu gerakan';
+      detectorWrap.classList.remove('active');
+    }
+    if(motionCooldown>0) motionCooldown -= 33;
+  }
+  prevFrame = frame;
+  setTimeout(()=>requestAnimationFrame(checkMotion), 33);
+}
+
+/* small UX: on click anywhere form sample text */
+document.addEventListener('dblclick', ()=>{
+  particleText = particleText === 'halo abibkah' ? 'space vibes' : 'halo abibkah';
+  document.getElementById('particleText').value = particleText;
+  formToText(particleText);
+});
+
+/* initial gentle animation: slowly bring into space vibe */
+setTimeout(()=>formToText(particleText), 1200);
+
+/* keyboard quick toggle cam hide: press c */
+addEventListener('keydown', (e)=>{
+  if(e.key === 'c'){ 
+    const wrap = document.getElementById('camWrap');
+    wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+  }
+});
+</script>
+
+</body>
+</html>
